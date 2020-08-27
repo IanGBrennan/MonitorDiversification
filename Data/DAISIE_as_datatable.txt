@@ -1,0 +1,4 @@
+Clade_name	Status	Missing_species	Branching_times
+Empagusia	Endemic	0	14.279939,3.99183402,0.964741006000001
+V_rudicollis	Endemic	0	5.946516953
+V_salvator	Non_endemic_MaxAge	0	0.980699275399999

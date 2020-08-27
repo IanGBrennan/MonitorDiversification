@@ -1,0 +1,14 @@
+A: Oriental + Sino-Japanese
+B: Australian
+C: Oceanian
+D: Saharo-Arabian + Palearctic
+E: Afrotropical
+
+Area divisions based on: 10.1126/science.1228282 
+
+I sent you the "best" models (based on AICc and LRT) from two analyses: one allowing A+C as a state and another one not permitting so.
+In the first case, the preferred model is DEC+J+X, and in the second case it's DEC+J.
+The DEC+J+X was preferred over the DEC+J based on the AICc (cannot use LRT because the constraints are different between the two).
+I think I will use the results of the run that does not allow A+C, not just because of the AICc but because Oceania was far from Asia during the Oligocene,
+and probably Oceania consisted of nothing more than a few remote and small islands at the time.
+Besides an ancestral distribution of crown varanids in Eurasia makes more sense based on the fossil record (early varanids from Europe, Middle East, and Northern Africa).

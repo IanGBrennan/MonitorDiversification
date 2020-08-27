@@ -1,0 +1,850 @@
+---
+title: "Monitor Lizard Diversification with DAISIE"
+author: "Ian G. Brennan & Carlos Pavon Vazquez"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  #html_document:
+  #  toc: yes
+  pdf_document:
+    toc: yes
+linkcolor: "magenta"
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+knitr::opts_chunk$set(echo = TRUE)
+opts_knit$set(root.dir = "~/Documents/GitHub/MonitorDiversification/Data")
+```
+
+```{r wrap-hook, eval=T, echo=F}
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+```
+
+# Read Me
+This is a living markdown document that will hopefully walk us through the data and code necessary to repeat the analyses of monitor lizard diversification using DAISIE. All the files and code are available at the GitHub Repository [*MonitorDiversification*](https://github.com/IanGBrennan/MonitorDiversification) (this doesn't exist yet, just on my computer).
+
+\pagebreak
+
+Start off by loading a few packages that we'll need along the way.
+```{r, message=F, warning=F}
+library(dplyr)
+library(treeplyr)
+library(RCurl)
+library(phytools)
+library(RColorBrewer)
+library(ggplot2)
+library(DAISIE)
+# remember 'plyr' and 'dplyr' conflict, so don't load 'plyr'
+```
+
+```{r, eval=F, include=F, echo=F}
+setwd("~/Documents/GitHub/MonitorDiversification/Data")
+```
+
+
+# Data Visualization
+
+Start by reading in the tree and visualize the distribution of taxa
+```{r, eval=T, fig.height=10}
+vtree <- read.tree("Data/UsedTree.tre");
+regions <- read.delim("Data/geo_file_Regions.txt", sep="\t", row.names = 1)
+dotTree(vtree, regions, labels=T,length=8)
+```
+
+\  
+
+Read in the morphological data we have and visualize data.  
+I've made an additional data column to look at the Australian monitor data. I've categorized them as "endemic" to Australia (most of the *Odatria/Varanus* subgenera), "immigrant" (*doreanus/chlorostigma/keithhornei*), or "extralimital" which is just all things existing elsewhere exclusively.
+```{r, eval=T}
+morph.data <- read.csv("MorphForIan.csv", header=T)
+```
+
+```{r, eval=T}
+ggplot(morph.data, aes(Mean_logSVL, PC1_LinearMeasurements)) +
+  geom_point(data = transform(morph.data[c("Mean_logSVL", 
+                                           "PC1_LinearMeasurements")]), 
+             color = "grey85") +
+  geom_point(color = "#F46D43", size = 2) +
+  #stat_ellipse() +
+  theme_bw() +
+  facet_wrap(vars(Oz_Group))
+```
+
+\pagebreak
+
+```{r, eval=T}
+ggplot(morph.data, aes(PC1_LinearMeasurements, PC1_DorsalViewHead)) +
+  geom_point(data = transform(morph.data[c("PC1_LinearMeasurements", 
+                                           "PC1_DorsalViewHead")]), 
+             color = "grey85") +
+  geom_point(color = "#66C2A5", size = 2) +
+  #stat_ellipse() +
+  theme_bw() +
+  facet_wrap(vars(Oz_Group))
+```
+
+\pagebreak
+
+```{r, eval=T}
+ggplot(morph.data, aes(PC1_DorsalViewHead, PC1_LateralViewHead)) +
+  geom_point(data = transform(morph.data[c("PC1_DorsalViewHead", 
+                                           "PC1_LateralViewHead")]), 
+             color = "grey85") +
+  geom_point(color = "#3288BD", size = 2) +
+  #stat_ellipse() +
+  theme_bw() +
+  facet_wrap(vars(Oz_Group))
+```
+
+\pagebreak
+
+```{r, eval=T}
+ggplot(morph.data, aes(PC1_LinearMeasurements, PC1_LateralViewHead)) +
+  geom_point(data = transform(morph.data[c("PC1_LinearMeasurements", 
+                                           "PC1_LateralViewHead")]), 
+             color = "grey85") +
+  geom_point(color = "#D53E4F", size = 2) +
+  #stat_ellipse() +
+  theme_bw() +
+  facet_wrap(vars(Oz_Group))
+```
+
+\  
+
+### Quick Take-away Thought:
+From a preliminary view, it doesn't look like the three immigrant lineages (*doreanus, chlorostigma, keithhornei*) are exceptional in any of the morphological dimensions. Maybe that makes sense as to why they haven't speciated in Australia? They really just make it in around the edges, and they aren't doing anything wildly novel, so they don't spread/speciate?
+
+\pagebreak
+
+# Data Preparation
+## Extracting branching times
+We need to create an input file for DAISIE, consisting of the ages/names of incumbent clades and immigrant groups. 
+
+If you have questions about implementing the DAISIE models, we can check with the package tutorial:
+```{r, eval=F}
+DAISIE_tutorial()
+```
+
+The radiation of subgenera *Varanus/Odatria* is the incumbent group, and there are three immigrant lineages (*V. keithhornei*, *V. doreanus*, *V. chlorostigma*).  
+We want to get the ages of these lineages in the Australian region.
+```{r, eval=T}
+ov.bt <- branching.times(extract.clade(vtree, 
+                                       getMRCA(vtree, c("komodoensis", "tristis"))))
+names(ov.bt) <- NULL; ov.bt <- sort(ov.bt, decreasing=T)
+
+vk.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "keithhornei")))
+vd.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "doreanus")))
+vc.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "chlorostigma")))
+```
+
+Let's do the same thing for the Papuan radiation
+```{r, eval=T}
+pa.bt <- branching.times(extract.clade(vtree, 
+                                       getMRCA(vtree, c("indicus", "prasinus"))))
+names(pa.bt) <- NULL; pa.bt <- sort(pa.bt, decreasing=T)
+
+vsa.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "salvadorii")))
+vsc.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "scalaris")))
+vst.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "salvator")))
+vpa.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "panoptes")))
+```
+
+And again for the Asian mainland group
+```{r, eval=T}
+as.bt <- branching.times(extract.clade(vtree, 
+                                       getMRCA(vtree, c("dumerilii", "bengalensis"))))
+names(as.bt) <- NULL; as.bt <- sort(as.bt, decreasing=T)
+
+vr.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "rudicollis")))
+vst.bt <- max(nodeHeights(vtree)) - 
+         nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "salvator")))
+```
+
+
+## Making a DAISIE datatable
+<!--Now that we have the info, put it into a dataframe for DAISIE.-->
+We know the *Odatria/Varanus* radiation is endemic to Australia <!--(minus a couple lineages that have since left - we need to think about how to handle these)-->. *V. keithhornei* is a Cape York endemic species as well, but *V. doreanus* and *V. chlorostigma* exist elsewhere as well (New Guinea). We will characterize these latter two in our data as "Non_endemic_MaxAge", because we know they aren't endemic lineages, but we don't know how old the Australian population is, though it must be younger than the age of their MRCAs.
+```{r, eval=T}
+DAISIE.oz <- data.frame(Clade_name = c("Odatria_Varanus", 
+                                       "V_keithhornei", 
+                                       "V_doreanus", 
+                                       "V_chlorostigma"),
+                        Status = c("Endemic", 
+                                   "Endemic", 
+                                   "Non_endemic_MaxAge", 
+                                   "Non_endemic_MaxAge"),
+                        Missing_species = c(0, 0, 0, 0),
+                        Branching_times = c(paste(ov.bt, collapse=","), 
+                                            vk.bt, vd.bt, vc.bt))
+DAISIE.oz[1:4,1:3]
+```
+
+\  
+
+If you'd like, we can write this dataframe to a file which we can read in later.
+```{r, eval=F}
+write.table(DAISIE.oz, file = "Data/DAISIE_oz_datatable.txt", 
+            sep = "\t", quote = F, row.names = F)
+```
+
+\  
+
+Let's do the same for the *Papuan* radiation. The incumbent (endemic) radiation is Hapturosaurus + Euprepiosaurus (mangrove and tree monitors), and then *V. salvadorii*, *V. scalaris*, and *V. panoptes* have emigrated from Australia, and *V.salvator* has emigrated from Indonesia. All three of the four species exist elsewhere and we don't know how long they've been in New Guinea, but the fourth *V. salvadorii* is an endemic lineage.
+```{r, eval=T}
+DAISIE.pa <- data.frame(Clade_name = c("Mangrove_Tree", 
+                                       "V_salvadorii", 
+                                       "V_scalaris", 
+                                       "V_salvator",
+                                       "V_panoptes"),
+                        Status = c("Endemic", 
+                                   "Endemic", 
+                                   "Non_endemic_MaxAge", 
+                                   "Non_endemic_MaxAge",
+                                   "Non_endemic_MaxAge"),
+                        Missing_species = c(0, 0, 0, 0, 0),
+                        Branching_times = c(paste(pa.bt, collapse=","), 
+                                            vsa.bt, vsc.bt, vst.bt, vpa.bt))
+DAISIE.pa[1:5,1:3]
+```
+
+\  
+
+If you'd like, we can write this dataframe to a file which we can read in later.
+```{r, eval=F}
+write.table(DAISIE.pa, file = "Data/DAISIE_pa_datatable.txt", 
+            sep = "\t", quote = F, row.names = F)
+```
+
+\  
+
+And one more time for the mainland Asian radiation. The incumbent (endemic) radiation is Empagusia, and *V. rudicollis* and *V. salvator* have arrived from the east. *V. rudicollis* is endemic, and like in the Papuan situation, *V. salvator* is an immigrant and we don't know how long they've been around for.
+```{r, eval=T}
+DAISIE.as <- data.frame(Clade_name = c("Empagusia", 
+                                       "V_rudicollis", 
+                                       "V_salvator"),
+                        Status = c("Endemic", 
+                                   "Endemic", 
+                                   "Non_endemic_MaxAge"),
+                        Missing_species = c(0, 0, 0),
+                        Branching_times = c(paste(as.bt, collapse=","), 
+                                            vr.bt, vst.bt))
+DAISIE.as[1:3,1:3]
+```
+
+\  
+
+If you'd like, we can write this dataframe to a file which we can read in later.
+```{r, eval=F}
+write.table(DAISIE.as, file = "Data/DAISIE_as_datatable.txt", 
+            sep = "\t", quote = F, row.names = F)
+```
+
+\  
+
+---
+
+\  
+
+## Making a DAISIE datalist
+
+Translate your data from a dataframe into a DAISIE datalist.   
+This first datalist assumes all taxa belong to a single grouping for the purposes of estimating parameters.  
+We'll do this for each of the areas we're investigating. This process also requires that we designate an island age, and the number of lineages that could be in the "source" population (really just number of total number of species - endemics, I think). 
+```{r, eval=T}
+all.list.oz    <- DAISIE_dataprep(datatable = DAISIE.oz,
+                              island_age = 35, M = 30)
+
+all.list.pa    <- DAISIE_dataprep(datatable = DAISIE.pa,
+                              island_age = 35, M = 50)
+
+all.list.as    <- DAISIE_dataprep(datatable = DAISIE.as,
+                              island_age = 35, M = 68)
+```
+
+\  
+
+Create a second DAISIE datalist with two groupings (1:Odatria/Varanus, 2:all other immigrant groups; 1:Euprepiosaurus/Hapturosaurus, 2:all immigrants; 1:Empagusia, 2:all immigrants). This will allow us to estimate separate parameter values for the two groups (incumbent vs. immigrant).  
+Here we also have to designate the proportion of the source species that the immigrants are (n-immigrants / n-source), which is *prop_type2_pool*.
+```{r, eval=T}
+split.list.oz <- DAISIE_dataprep(datatable = DAISIE.oz,
+                              island_age = 35, M = 30,
+                              number_clade_types = 2,
+                              list_type2_clades = c("V_keithornei", 
+                                                    "V_doreanus", 
+                                                    "V_chlorostigma"),
+                              prop_type2_pool = 0.1)
+
+split.list.pa <- DAISIE_dataprep(datatable = DAISIE.pa,
+                              island_age = 35, M = 50,
+                              number_clade_types = 2,
+                              list_type2_clades = c("V_salvadorii", 
+                                                    "V_scalaris", 
+                                                    "V_salvator",
+                                                    "V_panoptes"),
+                              prop_type2_pool = 0.08)
+
+split.list.as <- DAISIE_dataprep(datatable = DAISIE.as,
+                              island_age = 35, M = 68,
+                              number_clade_types = 2,
+                              list_type2_clades = c("V_rudicollis", 
+                                                    "V_salvator"),
+                              prop_type2_pool = 0.03)
+```
+
+\  
+
+Check out the info that's held in the DAISIE datalist
+```{r, eval=T}
+# island info
+split.list.oz[[1]]
+
+# group 1 info
+split.list.oz[[2]][1:2]
+```
+
+\pagebreak
+
+# Fitting DAISIE models
+
+Below are examples of how to build and fit a number of models with DAISIE. I've left *eval = F* at the moment because fitting the model a single time is probably insufficient, as maximum likelihood can get trapped in local (sub)optima. We will come back to this in a minute.  
+
+Either way, fitting the models takes quite a bit of time, so my recommendation is to run them externally, then load the model fit objects and summarize/compare/plot them here to keep things clea
+
+--- 
+
+## Equal Rates model with Diversity Dependence
+5 parameters (cladogenetic speciation, extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups.
+```{r, eval=F}
+eqr_0 <- DAISIE_ML(datalist = all.list.oz,
+                 initparsopt = c(0.2, 0.15, 30, 0.01, 0.1),
+                 idparsopt = 1:5,
+                 ddmodel = 11,
+                 parsfix = NULL, 
+                 idparsfix = NULL)
+```
+
+--- 
+
+## Equal Rates model without Diversity Dependence
+4 parameters (cladogenetic speciation, extinction, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups. There is no carrying capacity (param 3), so it is fixed at *Infinity*.
+```{r, eval=F}
+eqr_noDD_0 <- DAISIE_ML(datalist = all.list.oz,
+                      initparsopt = c(0.2, 0.15, 0.01, 0.01),
+                      idparsopt = c(1,2,4,5),
+                      parsfix = Inf,
+                      ddmodel = NULL,
+                      idparsfix = 3)
+```
+
+--- 
+
+## Two Rate Speciation model with Diversity Dependence
+4 parameters (extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation rates for the two groups (*Odatria/Varanus* and immigrants).
+```{r, eval=F}
+two_lambda <- DAISIE_ML(datalist = split.list,
+                        ddmodel = 11,
+                        initparsopt = c(1, 0.1, 30, 0.005, 0.1, 
+                                        1),
+                        idparsopt = c(1,2,3,4,5,6),
+                        parsfix = NULL,
+                        idparsfix = NULL,
+                        idparsnoshift = c(7,8,9,10))
+```
+
+--- 
+
+## Two Rate Speciation and Extinction model with Diversity Dependence
+3 parameters (carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation and extinction rates for the two groups (*Odatria/Varanus* and immigrants).
+```{r, eval=F}
+two_lambda_mu <- DAISIE_ML(datalist = split.list,
+                           ddmodel = 11,
+                           initparsopt = c(1, 0.1, 30, 0.005, 0.1, 
+                                           1, 0.1),
+                           idparsopt = c(1,2,3,4,5,6,7),
+                           parsfix = NULL,
+                           idparsfix = NULL,
+                           idparsnoshift = c(8,9,10))
+```
+
+--- 
+
+## Comparing the fit of DAISIE Models
+Compare the fit of the models using the custom *DAISIE.AIC* function.
+```{r, eval=F}
+source("Scripts/Calculate_AICs.R")
+#DAISIE.AIC(models = c("eqr", "two_lambda"))
+DAISIE.AIC(models = c("eqr", "eqr_noDD"))
+```
+
+\pagebreak
+
+# Fitting DAISIE Models in Parallel
+
+Import a custom function to fit DAISIE models multiply from different starting parameter values
+```{r, eval=T}
+source("Scripts/search.surface.DAISIE.R")
+```
+
+\  
+
+I'll try and quickly explain what you need to provide the function:  
+    $\bullet$ **model**---the DAISIE datalist suited for the model you'd like to fit  
+    $\bullet$ **n.iter**---the number of model fittings you'd like completed, defaults to 10  
+    $\bullet$ **n.proc**---number of processors. this function will fit the model in parallel  
+    $\bullet$ **g1.params**---if you'd like to provide starting values for parameters 1:5 (lambda_c, mu, K, gamma, lambda_a) do that here. Otherwise, they'll be drawn randomly from a reasonable (flat) prior  
+    $\bullet$ **g1.params**---if you need to estimate parameters for a second group 6:10 (lambda_c, mu, K, gamma, lambda_a) do that here. They'll be drawn randomly from a reasonable (flat) prior. I could design it to work like g1.params, but I just haven't yet  
+    $\bullet$ **results**---would you like the function to report just the best fitting run, or all the results from each fit attempt  
+    $\bullet$ **start.params**---ignore this, just leave it as NULL  
+    $\bullet$ **dd.model**---same as *ddmodel* in DAISIE, 11 for linear density dependence, etc.  
+    $\bullet$ **id.parsopt**---same as *idparsopt* in DAISIE, ids for which parameters to optimize  
+    $\bullet$ **pars.fix**---same as *parsfix* in DAISIE, which parameters to fix  
+    $\bullet$ **id.parsfix**---same as *idparsfix* in DAISIE, ids for the parameters to fix  
+    
+--- 
+
+## Equal Rates model with Diversity Dependence
+5 parameters (cladogenetic speciation, extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups.
+```{r, eval=F}
+eqr <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", start.params = NULL,
+                             dd.model = 11,
+                             id.parsopt = c(1:5),
+                             pars.fix = NULL,
+                             id.parsfix = NULL,
+                             id.parsnoshift = NULL,
+                             no.types = 1)
+```
+
+If you fit the model with *results = "all"*, then you'll get all the model fittings, plus a designated *best.result* which we can look at below:
+```{r, eval=F}
+eqr$best.result
+```
+Otherwise, if you fit *results = "best"*, then you only return the best fitting version.
+
+--- 
+
+## Pure Birth Models
+In all Pure Birth models, the extinction rate is 0, so this parameter is not estimated (fixed).
+
+### Pure-Birth model **without** Diversity Dependence
+This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and there is no diversity dependence (carrying capacity *K* = Infinite).
+```{r, eval=F}
+eqpb_noDD <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 0,
+                             id.parsopt = c(1,4,5),
+                             pars.fix = c(0,Inf),
+                             id.parsfix = c(2,3),
+                             no.types = 1)
+```
+
+### Pure-Birth model with equal speciation rates linear to Diversity Dependence
+This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation rate is linearly dependent on the carrying capacity *K* (linear diversity dependence, ddmodel = 1).
+```{r, eval=F}
+eqpb_linDD_1 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 1,
+                             id.parsopt = c(1,3,4,5),
+                             pars.fix = 0,
+                             id.parsfix = 2,
+                             no.types = 1)
+```
+
+### Pure-Birth model with equal speciation rates exponential to Diversity Dependence
+This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation rate is exponentially dependent on the carrying capacity *K* (exponential diversity dependence, ddmodel = 2).
+```{r, eval=F}
+#rename eqpb_expDD_2
+eqpb_expDD_2 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 2,
+                             id.parsopt = c(1,3,4,5),
+                             pars.fix = 0,
+                             id.parsfix = 2,
+                             no.types = 1)
+```
+
+### Pure-Birth model with equal speciation rates and immigration rate linear to Diversity Dependence
+This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation and immigration rates are linearly dependent on the carrying capacity *K* (linear diversity dependence, ddmodel = 11).
+```{r, eval=F}
+eqpb_linDD_11 <- search.surface.DAISIE(model = all.list.oz, n.iter = 5, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 11,
+                             id.parsopt = c(1,3,4,5),
+                             pars.fix = 0,
+                             id.parsfix = 2,
+                             no.types = 1)
+```
+
+### Pure-Birth model with equal speciation rates and immigration rate exponential to Diversity Dependence
+This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation and immigration rates are exponentially dependent on the carrying capacity *K* (exponential diversity dependence, ddmodel = 21).
+```{r, eval=F}
+eqpb_expDD_21 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 21,
+                             id.parsopt = c(1,3,4,5),
+                             pars.fix = 0,
+                             id.parsfix = 2,
+                             no.types = 1)
+```
+
+
+```{r, eval=F}
+pb_res <- list(eqpb_noDD = eqpb_noDD,
+               eqpb_linDD_1 = eqpb_linDD_1,
+               eqpb_expDD_2 = eqpb_expDD_2,
+               eqpb_linDD_11 = eqpb_linDD_11,
+               eqpb_expDD_21 = eqpb_expDD_21)
+saveRDS(pb_res, "../Results/DAISIE_Australian_PureBirth_Results.RDS")
+```
+
+---
+
+## Birth Death Models
+In all Birth Death models **both** speciation and extinction are estimated from the data.
+
+### Birth Death model with equal speciation/extinction rates **without** Diversity Dependence
+Note: this took ~16 min.
+```{r, eval=F}
+eqr_noDD <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             #start.params = unlist(eqr_noDD_0[c(1,2,4,5)]),
+                             dd.model = 0,
+                             id.parsopt = c(1,2,4,5),
+                             pars.fix = Inf,
+                             id.parsfix = 3,
+                             no.types = 1)
+```
+
+### Birth Death model with equal speciation/extinction rates, and specation linear to Diversity Dependence
+Note: this took ~24 min.
+```{r, eval=F}
+eqr_linDD_1 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 1,
+                             id.parsopt = c(1:5),
+                             pars.fix = NULL,
+                             id.parsfix = NULL,
+                             no.types = 1)
+```
+
+### Birth Death model with equal speciation/extinction rates, and speciation exponential to Diversity Dependence
+Note: this took ~28 min
+```{r, eval=F}
+eqr_expDD_2 <- search.surface.DAISIE(model = all.list.oz, n.iter = 5, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 2,
+                             id.parsopt = c(1:5),
+                             pars.fix = NULL,
+                             id.parsfix = NULL,
+                             no.types = 1)
+```
+
+### Birth Death model with equal speciation/extinction rates, and speciation/immigration linear to Diversity Dependence
+Note: this took ~12 min
+```{r, eval=F}
+eqr_linDD_11 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 11,
+                             id.parsopt = c(1:5),
+                             pars.fix = NULL,
+                             id.parsfix = NULL,
+                             no.types = 1)
+```
+
+### Birth Death model with equal speciation/extinction rates, and speciation/immigration exponential to Diversity Dependence
+Note: this took ~
+```{r, eval=F}
+eqr_expDD_21 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+                             g1.params = NULL, g2.params = NULL,
+                             results = "all", 
+                             start.params = NULL,
+                             dd.model = 21,
+                             id.parsopt = c(1:5),
+                             pars.fix = NULL,
+                             id.parsfix = NULL,
+                             no.types = 1)
+```
+
+```{r, eval=F}
+eqr_res <- list(eqr_noDD = eqr_noDD,
+                eqr_linDD_1 = eqr_linDD_1,
+                eqr_expDD_2 = eqr_expDD_2,
+                eqr_linDD_11 = eqr_linDD_11,
+                eqr_expDD_21 = eqr_expDD_21)
+saveRDS(eqr_res, "../Results/DAISIE_Australian_EqualRatesBD_Results.RDS")
+```
+
+---
+## Split-Rate Birth Death Models
+These models follow the birth death models above, but allow different rates (speciation, extinction, or both) between incumbent and immigrant lineages. They require a DAISIE datalist with two groups designed using *DAISIE_dataprep( )* with *number_clade_types* = 2. 
+
+### Birth Death model with **two** speciation rates **without** diversity dependence
+4 parameters (extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation rates for the two groups (*Odatria/Varanus* and immigrants).
+```{r, eval=F}
+twosp_noDD <- search.surface.DAISIE(model = split.list.oz, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 0,
+                                    id.parsopt = c(1,2,4,5,6),
+                                    pars.fix = Inf,
+                                    id.parsfix = 3,
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2)
+```
+
+```{r, eval=F}
+twosp_linDD_1 <- search.surface.DAISIE(model = split.list.oz, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 1,
+                                    id.parsopt = c(1,2,4,5,6),
+                                    pars.fix = NULL,
+                                    id.parsfix = NULL,
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2)
+```
+
+
+
+---
+
+\  
+
+I'll leave a gap here to build more models or show how we could construct them at least.
+
+\  
+
+--- 
+
+## Comparing the fit of DAISIE Models run in parallel
+Compare the fit of the models using the custom *DAISIE.AIC* function.
+```{r, eval=F}
+source("../Scripts/Calculate_AICs.R")
+equal_rates <- eqr$best.result
+two_sp <- two_lambda$best.result
+DAISIE.AIC(models = c("equal_rates", "two_sp"))
+```
+
+\pagebreak
+
+# Diversification Models with ClaDS
+
+Direct your working directory to the folder that holds the ClaDS scripts
+```{r, eval=F}
+setwd("~/Google.Drive/R.Analyses/ClaDS/")
+```
+
+Load RPANDA
+```{r, eval=T, message=F, warning=F}
+library(RPANDA)
+```
+
+\  
+
+In case you're jumping straight to here, start by reading in the tree
+```{r, eval=T, fig.height=10}
+vtree <- read.tree("UsedTree.tre")
+```
+
+\  
+
+ClaDS (within RPANDA) has a couple of models we can fit  
+  $\bullet$ **ClaDS0**---assumes pure birth process when estimating speciation rates (extinction = 0)  
+  $\bullet$ **ClaDS1**---assumes a constant extinction rate, and estimates variable speciation rates  
+  $\bullet$ **ClaDS2**---estimates variable speciation and extinction rates, but holds turnover rates constant  
+  
+\  
+
+Fitting these models takes a lot of time, and generations, so make sure to set the iterations relatively high. You can extend runs if you haven't reached convergence though.
+
+--- 
+
+## ClaDS0---Pure Birth Model
+```{r, eval=F}
+clads0.varanus <- fit_ClaDS0(tree = vtree,
+                           sample_fraction = (76/83),
+                           iterations = 10000,
+                           thin = 100,
+                           pamhLocalName = "local",
+                           #it_save = 10000,
+                           name = "Monitor_ClaDS0",
+                           nCPU = 3)
+```
+
+We can check the chains for convergence
+```{r, eval=F}
+plot_ClaDS_chains(clads2.varanus)
+```
+
+Then we can extract the per branch rates, and plot them along the tree
+```{r, eval=F}
+maps <- getMAPS_ClaDS(clads2.varanus, thin = 10)
+plot_ClaDS_phylo(vtree, maps[-(1:4)])
+```
+
+--- 
+
+## ClaDS2---Constant Turnover Model
+
+```{r, eval=F}
+clads2.varanus <- fit_ClaDS(tree = vtree,
+                           sample_fraction = (76/83),
+                           iterations = 10000,
+                           thin = 100,
+                           #it_save = 10000,
+                           file_name = "Monitor_ClaDS2",
+                           model_id = "ClaDS2",
+                           nCPU = 3)
+```
+
+We can check the chains for convergence
+```{r, eval=F}
+plot_ClaDS_chains(clads2.varanus)
+```
+
+Then we can extract the per branch rates and plot them along the tree
+```{r, eval=F}
+maps <- getMAPS_ClaDS(clads2.varanus, thin = 10)
+plot_ClaDS_phylo(vtree, maps[-(1:4)])
+```
+
+---
+
+Here's an example file I didn't run long enough:
+```{r, eval=T}
+c2_run1 <- readRDS("~/Documents/GitHub/MonitorDiversification/Data/ClaDS2_Varanus.RDS")
+```
+
+```{r, eval=F}
+plot_ClaDS_chains(c2_run1)
+```
+
+Let's look at the plot anyway, then make sure to run for more generations
+```{r, eval=T}
+maps <- getMAPS_ClaDS(c2_run1, thin = 10)
+plot_ClaDS_phylo(vtree, maps[-(1:4)])
+```
+
+\  
+
+The above example was run for 10,000 generations, thin = 100. 
+Run it longer by just providing the previous file
+```{r, eval=F}
+c2_run1_cont <- fit_ClaDS(tree = vtree,
+                           sample_fraction = (76/83),
+                           iterations = 10000,
+                           model_id = "ClaDS2",
+                           nCPU = 3,
+                          sampler = c2_run1)
+```
+
+\  
+
+We can read in a longer pre-cooked file. This one has been run for 200K generations and 3 chains.
+```{r, evail = T}
+load("~/Documents/GitHub/MonitorDiversification/Data/C2_Varanus_200K.RData")
+c2.varanus <- mcmcSampler
+maps <- getMAPS_ClaDS(c2.varanus, thin = 10)
+plot_ClaDS_phylo(vtree, maps[-(1:4)])
+```
+
+\  
+
+We might want to compare the speciation rates across different subgenera, or clades.  
+Start by making a function to extract the edge (branch) specific rates from the ClaDS object.
+```{r, eval=T}
+extract.ClaDS.rates <- function(rates, min.branch, max.branch){
+            clade.rates <- rates[(min.branch + 4):(max.branch + 4)]
+            return(clade.rates)}
+```
+This function is just really simple, and excludes the first four parameters (sigma, alpha, epsilon, l_0), when isolating the rates of interest.
+
+\  
+
+Now pick a handful of clades to compare:
+```{r, eval=T}
+odatria.rates <- extract.ClaDS.rates(maps, 7, 49)
+hapturo.rates <- extract.ClaDS.rates(maps, 69, 83)
+euprep.rates  <- extract.ClaDS.rates(maps, 83, 101)
+varanus.rates <- extract.ClaDS.rates(maps, 50, 66)
+sotero.rates  <- extract.ClaDS.rates(maps, 119, 137)
+empagus.rates <- extract.ClaDS.rates(maps, 112, 118)
+african.rates <- extract.ClaDS.rates(maps, 139, 149)
+```
+
+Put the rates together into a single data frame
+```{r, eval=T}
+all.rates <- data.frame(sp_rates = odatria.rates, group = "Odatria")
+all.rates <- add_row(all.rates, 
+                     sp_rates = hapturo.rates, 
+                     group = "Hapturosaurus")
+all.rates <- add_row(all.rates, 
+                     sp_rates = euprep.rates , 
+                     group = "Euprepiosaurus")
+all.rates <- add_row(all.rates, 
+                     sp_rates = varanus.rates, 
+                     group = "Varanus_Papusaurus")
+all.rates <- add_row(all.rates, 
+                     sp_rates = sotero.rates , 
+                     group = "Soterosaurus")
+all.rates <- add_row(all.rates, 
+                     sp_rates = empagus.rates, 
+                     group = "Empagusia")
+all.rates <- add_row(all.rates, 
+                     sp_rates = african.rates, 
+                     group = "Polydaedalus_Psammosaurus")
+```
+
+And plot these to get an idea of variation across the groups:
+```{r, eval=T, message=F, warning=F}
+library(ggridges)
+ggplot(all.rates, aes(x=sp_rates, y=group, 
+                       point_color=sp_rates)) +
+  geom_density_ridges(jittered_points = T, scale = 2,
+                      point_shape = "|", alpha = 0.75,
+                      point_size = 2, size = 0.5,
+                      position = position_points_jitter(height=0),
+                      aes(fill = group), show.legend =F) +
+  scale_fill_brewer(palette = "RdYlBu") +
+  theme_bw()
+```

@@ -20,26 +20,77 @@ phy.AICc <- function(phylo, LnL, numparams) {
   return(AICc_val)
 }
 
-DAISIE.AIC <- function(models){
+normal.AICc <- function(LnL, numparams, numsamples){
+  # Calculate AIC
+  AICval = 2*numparams - 2*LnL
+  
+  # Correction for finite sample size
+  correction_val = (2*numparams*(numparams+1) / (numsamples - numparams -1))
+  
+  AICc_val = AICval + correction_val
+  
+  return(AICc_val)
+}
+
+grabBIC <- function(LnL, numparams, numsamples){
+  BIC_val <- (-2 * LnL) + (numparams * log(numsamples))
+  
+  return(BIC_val)
+}
+
+DAISIE.AIC <- function(models, method="best"){
   results <- NULL
   model.names <- NULL
-  for (k in 1:length(models)) {
-    call.model <- paste0(models[k])
-    resLIK <- get(call.model)$loglik
-    resPAR <- get(call.model)$df
-    resAIC <- grabAIC(resLIK, resPAR)
-    results <- rbind(results, c(resLIK, resPAR, resAIC))
-    model.names <- append(model.names, models[k])
+  if(method == "best"){
+    for (k in 1:length(models)) {
+      call.model <- paste0(models[k])
+      resLIK <- get(call.model)$best.result$loglik
+      resPAR <- get(call.model)$best.result$df
+      resSAM <- get(call.model)$input.model$nsamples
+      resAIC <- grabAIC(resLIK, resPAR)
+      resAICc <- normal.AICc(resLIK, resPAR, resSAM)
+      results <- rbind(results, c(resLIK, resPAR, resAIC, resAICc))
+      model.names <- append(model.names, models[k])
+    }
   }
   rownames(results) <- model.names
-  colnames(results) <- c("logLik", "no.Param", "AIC")
+  colnames(results) <- c("logLik", "no.Param", "AIC", "AICc")
   results <- as.data.frame(results)
-  results <- results[order(results$AIC),]
-  results$delta.AIC <- results$AIC - results$AIC[1]
-  results$AICwt <- (as.matrix(aic.w(results$AIC)))
-  best.model <- subset(results, AIC == min(results$AIC))
+  results <- results[order(results$AICc),]
+  results$delta.AICc <- results$AICc - results$AICc[1]
+  results$AICcwt <- (as.matrix(aic.w(results$AICc)))
+  best.model <- subset(results, AICc == min(results$AICc))
   best <- rownames(best.model);
-  estimates <- get(paste0(best))
+  estimates <- get(paste0(best))$best.result
+  
+  output <- list(results, best.model, estimates)
+  names(output) <- c("results", "best.model", "parameter.estimates")
+  return(output)
+}
+
+DAISIE.BIC <- function(models, method="best"){
+  results <- NULL
+  model.names <- NULL
+  if(method == "best"){
+    for (k in 1:length(models)) {
+      call.model <- paste0(models[k])
+      resLIK <- get(call.model)$best.result$loglik
+      resPAR <- get(call.model)$best.result$df
+      resSAM <- get(call.model)$input.model$nsamples
+      resBIC <- grabBIC(resLIK, resPAR, resSAM)
+      results <- rbind(results, c(resLIK, resPAR, resBIC))
+      model.names <- append(model.names, models[k])
+    }
+  }
+  rownames(results) <- model.names
+  colnames(results) <- c("logLik", "no.Param", "BIC")
+  results <- as.data.frame(results)
+  results <- results[order(results$BIC),]
+  results$delta.BIC <- results$BIC - results$BIC[1]
+  results$BICwt <- (as.matrix(aic.w(results$BIC)))
+  best.model <- subset(results, BIC == min(results$BIC))
+  best <- rownames(best.model);
+  estimates <- get(paste0(best))$best.result
   
   output <- list(results, best.model, estimates)
   names(output) <- c("results", "best.model", "parameter.estimates")
@@ -147,4 +198,12 @@ joint.fit <- function(fit1, fit2, method=c("geiger", "rpanda")){
     combo.fit$inferredParams <- c(unlist(fit1$opt[1:2]), unlist(fit2$opt[1:2]))
   }
   return(combo.fit)
+}
+
+
+extract.models <- function(model.list){
+  all.bests
+  for(j in 1:length(model.list)){
+    
+  }
 }

@@ -8,6 +8,10 @@ output:
   pdf_document:
     toc: yes
 linkcolor: "magenta"
+header-includes:
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
 ---
 
 ```{r setup, include=FALSE}
@@ -32,7 +36,7 @@ knit_hooks$set(output = function(x, options) {
 ```
 
 # Read Me
-This is a living markdown document that will hopefully walk us through the data and code necessary to repeat the analyses of monitor lizard diversification using DAISIE. All the files and code are available at the GitHub Repository [*MonitorDiversification*](https://github.com/IanGBrennan/MonitorDiversification) (this doesn't exist yet, just on my computer).
+This is a living markdown document that will hopefully walk us through the data and code necessary to repeat the analyses of monitor lizard diversification using DAISIE. All the files and code are available at the GitHub Repository [*MonitorDiversification*](https://github.com/IanGBrennan/MonitorDiversification) (this is currently set to **private**).
 
 \pagebreak
 
@@ -48,8 +52,10 @@ library(DAISIE)
 # remember 'plyr' and 'dplyr' conflict, so don't load 'plyr'
 ```
 
-```{r, eval=F, include=F, echo=F}
-setwd("~/Documents/GitHub/MonitorDiversification/Data")
+```{r, include=FALSE, echo=FALSE}
+# CHANGE THIS LOCATION IF YOU'RE RUNNING THE CODE ON YOUR OWN COMPUTER!
+require("knitr")
+opts_knit$set(root.dir = "~/Documents/GitHub/MonitorDiversification/Data")
 ```
 
 
@@ -57,8 +63,8 @@ setwd("~/Documents/GitHub/MonitorDiversification/Data")
 
 Start by reading in the tree and visualize the distribution of taxa
 ```{r, eval=T, fig.height=10}
-vtree <- read.tree("Data/UsedTree.tre");
-regions <- read.delim("Data/geo_file_Regions.txt", sep="\t", row.names = 1)
+vtree <- read.tree("UsedTree.tre");
+regions <- read.delim("geo_file_Regions.txt", sep="\t", row.names = 1)
 dotTree(vtree, regions, labels=T,length=8)
 ```
 
@@ -179,15 +185,20 @@ vst.bt <- max(nodeHeights(vtree)) -
          nodeheight(vtree, getParent(vtree, which(vtree$tip.label == "salvator")))
 ```
 
+Once more for the combined Incumbent vs. Immigrant scenario
+```{r}
+inc.bt <- c(ov.bt, pa.bt, as.bt)
+```
+
 
 ## Making a DAISIE datatable
 <!--Now that we have the info, put it into a dataframe for DAISIE.-->
 We know the *Odatria/Varanus* radiation is endemic to Australia <!--(minus a couple lineages that have since left - we need to think about how to handle these)-->. *V. keithhornei* is a Cape York endemic species as well, but *V. doreanus* and *V. chlorostigma* exist elsewhere as well (New Guinea). We will characterize these latter two in our data as "Non_endemic_MaxAge", because we know they aren't endemic lineages, but we don't know how old the Australian population is, though it must be younger than the age of their MRCAs.
 ```{r, eval=T}
 DAISIE.oz <- data.frame(Clade_name = c("Odatria_Varanus", 
-                                       "V_keithhornei", 
-                                       "V_doreanus", 
-                                       "V_chlorostigma"),
+                                       "keithhornei", 
+                                       "doreanus", 
+                                       "chlorostigma"),
                         Status = c("Endemic", 
                                    "Endemic", 
                                    "Non_endemic_MaxAge", 
@@ -197,12 +208,29 @@ DAISIE.oz <- data.frame(Clade_name = c("Odatria_Varanus",
                                             vk.bt, vd.bt, vc.bt))
 DAISIE.oz[1:4,1:3]
 ```
+```{r}
+Australia.endemics <- data.frame(Clade_name = "Odatria_Varanus",
+                                 Status = "Endemic",
+                                 Missing_species = 0,
+                                 Branching_times = c(paste(ov.bt, collapse=",")))
+Australia.immigrants <- data.frame(Clade_name = c("keithhornei", "doreanus", "chlorostigma"),
+                                   Status = c("Endemic", "Non_endemic_MaxAge", "Non_endemic_MaxAge"),
+                                   Missing_species = c(0, 0, 0),
+                                   Branching_times = c(vk.bt, vd.bt, vc.bt))
+```
+
+
+View what the distribution of taxa ages and status looks like
+```{r}
+DAISIE_plot_island(DAISIE.oz, island_age = 35)
+```
+
 
 \  
 
 If you'd like, we can write this dataframe to a file which we can read in later.
 ```{r, eval=F}
-write.table(DAISIE.oz, file = "Data/DAISIE_oz_datatable.txt", 
+write.table(DAISIE.oz, file = "DAISIE_oz_datatable.txt", 
             sep = "\t", quote = F, row.names = F)
 ```
 
@@ -211,10 +239,10 @@ write.table(DAISIE.oz, file = "Data/DAISIE_oz_datatable.txt",
 Let's do the same for the *Papuan* radiation. The incumbent (endemic) radiation is Hapturosaurus + Euprepiosaurus (mangrove and tree monitors), and then *V. salvadorii*, *V. scalaris*, and *V. panoptes* have emigrated from Australia, and *V.salvator* has emigrated from Indonesia. All three of the four species exist elsewhere and we don't know how long they've been in New Guinea, but the fourth *V. salvadorii* is an endemic lineage.
 ```{r, eval=T}
 DAISIE.pa <- data.frame(Clade_name = c("Mangrove_Tree", 
-                                       "V_salvadorii", 
-                                       "V_scalaris", 
-                                       "V_salvator",
-                                       "V_panoptes"),
+                                       "salvadorii", 
+                                       "scalaris", 
+                                       "salvator1",
+                                       "panoptes"),
                         Status = c("Endemic", 
                                    "Endemic", 
                                    "Non_endemic_MaxAge", 
@@ -224,6 +252,22 @@ DAISIE.pa <- data.frame(Clade_name = c("Mangrove_Tree",
                         Branching_times = c(paste(pa.bt, collapse=","), 
                                             vsa.bt, vsc.bt, vst.bt, vpa.bt))
 DAISIE.pa[1:5,1:3]
+```
+
+```{r}
+NewGuinea.endemics <- data.frame(Clade_name = "Mangrove_Tree",
+                                 Status = "Endemic",
+                                 Missing_species = 0,
+                                 Branching_times = c(paste(pa.bt, collapse=",")))
+NewGuinea.immigrants <- data.frame(Clade_name = c("salvadorii", "scalaris", "salvator1", "panoptes"),
+                                   Status = c("Endemic", "Non_endemic_MaxAge", "Non_endemic_MaxAge", "Non_endemic_MaxAge"),
+                                   Missing_species = c(0, 0, 0, 0),
+                                   Branching_times = c(vsa.bt, vsc.bt, vst.bt, vpa.bt))
+```
+
+View what the distribution of taxa ages and status looks like
+```{r}
+DAISIE_plot_island(DAISIE.pa, island_age = 35)
 ```
 
 \  
@@ -239,8 +283,8 @@ write.table(DAISIE.pa, file = "Data/DAISIE_pa_datatable.txt",
 And one more time for the mainland Asian radiation. The incumbent (endemic) radiation is Empagusia, and *V. rudicollis* and *V. salvator* have arrived from the east. *V. rudicollis* is endemic, and like in the Papuan situation, *V. salvator* is an immigrant and we don't know how long they've been around for.
 ```{r, eval=T}
 DAISIE.as <- data.frame(Clade_name = c("Empagusia", 
-                                       "V_rudicollis", 
-                                       "V_salvator"),
+                                       "rudicollis", 
+                                       "salvator2"),
                         Status = c("Endemic", 
                                    "Endemic", 
                                    "Non_endemic_MaxAge"),
@@ -250,15 +294,68 @@ DAISIE.as <- data.frame(Clade_name = c("Empagusia",
 DAISIE.as[1:3,1:3]
 ```
 
+```{r}
+Asia.endemics <- data.frame(Clade_name = "Empagusia",
+                                 Status = "Endemic",
+                                 Missing_species = 0,
+                                 Branching_times = c(paste(as.bt, collapse=",")))
+Asia.immigrants <- data.frame(Clade_name = c("rudicollis", "salvator2"),
+                                   Status = c("Endemic", "Non_endemic_MaxAge"),
+                                   Missing_species = c(0, 0),
+                                   Branching_times = c(vr.bt, vst.bt))
+```
+
+View what the distribution of taxa ages and status looks like
+```{r}
+DAISIE_plot_island(DAISIE.as, island_age = 35)
+```
+
 \  
 
 If you'd like, we can write this dataframe to a file which we can read in later.
 ```{r, eval=F}
-write.table(DAISIE.as, file = "Data/DAISIE_as_datatable.txt", 
+write.table(DAISIE.as, file = "DAISIE_as_datatable.txt", 
             sep = "\t", quote = F, row.names = F)
 ```
 
 \  
+
+Let's do this one last time grouping all the incumbent groups together (Empagusia, Odatria/Varanus, Hapturosaurus/Euprepiosaurus), and all the immigrants together, to see if we can find stronger signal in this combined dataset.
+```{r}
+DAISIE.combo <- data.frame(Clade_name = c("Odatrai_Varanus",
+                                          "keithhornei", 
+                                          "doreanus", 
+                                          "chlorostigma",
+                                          "Mangrove_Tree",
+                                          "salvadorii", 
+                                          "scalaris", 
+                                          "salvator1",
+                                          "panoptes",
+                                          "Empagusia",
+                                          "rudicollis", 
+                                          "salvator2"),
+                           Status = c("Endemic", 
+                                      "Endemic", 
+                                      "Non_endemic_MaxAge", 
+                                      "Non_endemic_MaxAge",
+                                      "Endemic", 
+                                      "Endemic", 
+                                      "Non_endemic_MaxAge", 
+                                      "Non_endemic_MaxAge",
+                                      "Non_endemic_MaxAge",
+                                      "Endemic", 
+                                      "Endemic", 
+                                      "Non_endemic_MaxAge"),
+                           Missing_species = c(0,0,0,0,0,0,0,0,0,0,0,0),
+                           Branching_times = c(paste(ov.bt, collapse=","), vk.bt, vd.bt, vc.bt,
+                                               paste(pa.bt, collapse=","), vsa.bt, vsc.bt, vst.bt, vpa.bt,
+                                               paste(as.bt, collapse=","), vr.bt, vst.bt))
+```
+
+View what the distribution of taxa ages and status looks like
+```{r}
+DAISIE_plot_island(DAISIE.combo, island_age = 35)
+```
 
 ---
 
@@ -272,12 +369,36 @@ We'll do this for each of the areas we're investigating. This process also requi
 ```{r, eval=T}
 all.list.oz    <- DAISIE_dataprep(datatable = DAISIE.oz,
                               island_age = 35, M = 30)
+#names(all.list.oz) <- rep("Australia", length(all.list.oz))
 
 all.list.pa    <- DAISIE_dataprep(datatable = DAISIE.pa,
                               island_age = 35, M = 50)
+#names(all.list.pa) <- rep("NewGuinea", length(all.list.pa))
 
 all.list.as    <- DAISIE_dataprep(datatable = DAISIE.as,
                               island_age = 35, M = 68)
+#names(all.list.as) <- rep("Asia", length(all.list.as))
+
+all.list.combo <- list(Australia = all.list.oz,
+                       NewGuinea = all.list.pa,
+                       Asia = all.list.as)
+
+AUin.list <- DAISIE_dataprep(datatable = Australia.endemics,
+                             island_age = 35, M = 30)
+AUim.list <- DAISIE_dataprep(datatable = Australia.immigrants,
+                             island_age = 35, M = 30)
+NGin.list <- DAISIE_dataprep(datatable = NewGuinea.endemics,
+                             island_age = 35, M = 50)
+NGim.list <- DAISIE_dataprep(datatable = NewGuinea.immigrants,
+                             island_age = 35, M = 50)
+ASin.list <- DAISIE_dataprep(datatable = Asia.endemics,
+                             island_age = 35, M = 68)
+ASim.list <- DAISIE_dataprep(datatable = Asia.immigrants,
+                             island_age = 35, M = 68)
+
+combined.list <- list(AUin = AUin.list, AUim = AUim.list,
+                      NGin = NGin.list, NGim = NGim.list,
+                      ASin = ASin.list, ASim = ASim.list)
 ```
 
 \  
@@ -288,26 +409,38 @@ Here we also have to designate the proportion of the source species that the imm
 split.list.oz <- DAISIE_dataprep(datatable = DAISIE.oz,
                               island_age = 35, M = 30,
                               number_clade_types = 2,
-                              list_type2_clades = c("V_keithornei", 
-                                                    "V_doreanus", 
-                                                    "V_chlorostigma"),
+                              list_type2_clades = c("keithhornei", 
+                                                    "doreanus", 
+                                                    "chlorostigma"),
                               prop_type2_pool = 0.1)
 
 split.list.pa <- DAISIE_dataprep(datatable = DAISIE.pa,
                               island_age = 35, M = 50,
                               number_clade_types = 2,
-                              list_type2_clades = c("V_salvadorii", 
-                                                    "V_scalaris", 
-                                                    "V_salvator",
-                                                    "V_panoptes"),
+                              list_type2_clades = c("salvadorii", 
+                                                    "scalaris", 
+                                                    "salvator1",
+                                                    "panoptes"),
                               prop_type2_pool = 0.08)
 
 split.list.as <- DAISIE_dataprep(datatable = DAISIE.as,
                               island_age = 35, M = 68,
                               number_clade_types = 2,
-                              list_type2_clades = c("V_rudicollis", 
-                                                    "V_salvator"),
+                              list_type2_clades = c("rudicollis", 
+                                                    "salvator2"),
                               prop_type2_pool = 0.03)
+
+#split.list.ic <- DAISIE_dataprep(datatable = DAISIE.combo,
+#                              island_age = 35, M = 75,
+#                              number_clade_types = 2,
+#                              list_type2_clades = c("keithhornei", "doreanus", "chlorostigma",
+#                                                    "salvadorii", "scalaris", "salvator1", "panoptes",
+#                                                    "rudicollis", "salvator2"),
+#                              prop_type2_pool = 0.1)
+
+#split.list.ic <- list(Australia = split.list.oz,
+#                      NewGuinea = split.list.pa,
+#                      Asia = split.list.as)
 ```
 
 \  
@@ -360,7 +493,7 @@ eqr_noDD_0 <- DAISIE_ML(datalist = all.list.oz,
 ## Two Rate Speciation model with Diversity Dependence
 4 parameters (extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation rates for the two groups (*Odatria/Varanus* and immigrants).
 ```{r, eval=F}
-two_lambda <- DAISIE_ML(datalist = split.list,
+two_lambda <- DAISIE_ML(datalist = split.list.oz,
                         ddmodel = 11,
                         initparsopt = c(1, 0.1, 30, 0.005, 0.1, 
                                         1),
@@ -375,13 +508,13 @@ two_lambda <- DAISIE_ML(datalist = split.list,
 ## Two Rate Speciation and Extinction model with Diversity Dependence
 3 parameters (carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation and extinction rates for the two groups (*Odatria/Varanus* and immigrants).
 ```{r, eval=F}
-two_lambda_mu <- DAISIE_ML(datalist = split.list,
+two_lambda_mu <- DAISIE_ML(datalist = split.list.oz,
                            ddmodel = 11,
                            initparsopt = c(1, 0.1, 30, 0.005, 0.1, 
                                            1, 0.1),
                            idparsopt = c(1,2,3,4,5,6,7),
-                           parsfix = NULL,
-                           idparsfix = NULL,
+                           parsfix = 0.8,
+                           idparsfix = 11,
                            idparsnoshift = c(8,9,10))
 ```
 
@@ -389,10 +522,10 @@ two_lambda_mu <- DAISIE_ML(datalist = split.list,
 
 ## Comparing the fit of DAISIE Models
 Compare the fit of the models using the custom *DAISIE.AIC* function.
-```{r, eval=F}
-source("Scripts/Calculate_AICs.R")
+```{r, eval=T}
+source("../Scripts/Calculate_AICs.R")
 #DAISIE.AIC(models = c("eqr", "two_lambda"))
-DAISIE.AIC(models = c("eqr", "eqr_noDD"))
+#DAISIE.AIC(models = c("eqr", "eqr_noDD"))
 ```
 
 \pagebreak
@@ -401,7 +534,7 @@ DAISIE.AIC(models = c("eqr", "eqr_noDD"))
 
 Import a custom function to fit DAISIE models multiply from different starting parameter values
 ```{r, eval=T}
-source("Scripts/search.surface.DAISIE.R")
+source("../Scripts/search.surface.DAISIE.R")
 ```
 
 \  
@@ -443,13 +576,22 @@ Otherwise, if you fit *results = "best"*, then you only return the best fitting 
 
 --- 
 
+Before we get going, let's designate the group we want to work with
+```{r, eval=F}
+curr.group <- all.list.pa
+curr.split <- split.list.pa
+ntaxa <- 23
+samp.prop <- 0.9
+```
+
+
 ## Pure Birth Models
 In all Pure Birth models, the extinction rate is 0, so this parameter is not estimated (fixed).
 
-### Pure-Birth model **without** Diversity Dependence
+### Pure-Birth **without** Diversity Dependence
 This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and there is no diversity dependence (carrying capacity *K* = Infinite).
 ```{r, eval=F}
-eqpb_noDD <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqpb_noDD <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -457,13 +599,15 @@ eqpb_noDD <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12
                              id.parsopt = c(1,4,5),
                              pars.fix = c(0,Inf),
                              id.parsfix = c(2,3),
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Pure-Birth model with equal speciation rates linear to Diversity Dependence
+### PB with Speciation Linear to DD
+Pure-Birth model with equal speciation rates linear to Diversity Dependence
 This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation rate is linearly dependent on the carrying capacity *K* (linear diversity dependence, ddmodel = 1).
 ```{r, eval=F}
-eqpb_linDD_1 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqpb_linDD_1 <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -471,14 +615,15 @@ eqpb_linDD_1 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc =
                              id.parsopt = c(1,3,4,5),
                              pars.fix = 0,
                              id.parsfix = 2,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Pure-Birth model with equal speciation rates exponential to Diversity Dependence
+### PB with Speciation Exponential to DD
+Pure-Birth model with equal speciation rates exponential to Diversity Dependence
 This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation rate is exponentially dependent on the carrying capacity *K* (exponential diversity dependence, ddmodel = 2).
 ```{r, eval=F}
-#rename eqpb_expDD_2
-eqpb_expDD_2 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqpb_expDD_2 <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -486,13 +631,15 @@ eqpb_expDD_2 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc =
                              id.parsopt = c(1,3,4,5),
                              pars.fix = 0,
                              id.parsfix = 2,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Pure-Birth model with equal speciation rates and immigration rate linear to Diversity Dependence
+### PB with Speciation/Immigration Linear to DD
+Pure-Birth model with equal speciation rates and immigration rate linear to Diversity Dependence
 This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation and immigration rates are linearly dependent on the carrying capacity *K* (linear diversity dependence, ddmodel = 11).
 ```{r, eval=F}
-eqpb_linDD_11 <- search.surface.DAISIE(model = all.list.oz, n.iter = 5, n.proc = 12,
+eqpb_linDD_11 <- search.surface.DAISIE(model = curr.group, n.iter = 5, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -500,13 +647,15 @@ eqpb_linDD_11 <- search.surface.DAISIE(model = all.list.oz, n.iter = 5, n.proc =
                              id.parsopt = c(1,3,4,5),
                              pars.fix = 0,
                              id.parsfix = 2,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Pure-Birth model with equal speciation rates and immigration rate exponential to Diversity Dependence
+### PB with Speciation/Immigration Exponential to DD
+Pure-Birth model with equal speciation rates and immigration rate exponential to Diversity Dependence
 This model estimates a single speciation rate shared by the two groups, extinction is set to zero, and the speciation and immigration rates are exponentially dependent on the carrying capacity *K* (exponential diversity dependence, ddmodel = 21).
 ```{r, eval=F}
-eqpb_expDD_21 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqpb_expDD_21 <- search.surface.DAISIE(model = curr.group, n.iter = 5, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -514,11 +663,12 @@ eqpb_expDD_21 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc 
                              id.parsopt = c(1,3,4,5),
                              pars.fix = 0,
                              id.parsfix = 2,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
 
-```{r, eval=F}
+```{r, eval=F, include=F}
 pb_res <- list(eqpb_noDD = eqpb_noDD,
                eqpb_linDD_1 = eqpb_linDD_1,
                eqpb_expDD_2 = eqpb_expDD_2,
@@ -527,15 +677,16 @@ pb_res <- list(eqpb_noDD = eqpb_noDD,
 saveRDS(pb_res, "../Results/DAISIE_Australian_PureBirth_Results.RDS")
 ```
 
----
+\pagebreak
 
 ## Birth Death Models
 In all Birth Death models **both** speciation and extinction are estimated from the data.
 
-### Birth Death model with equal speciation/extinction rates **without** Diversity Dependence
-Note: this took ~16 min.
+### BD without DD
+Birth Death model with equal speciation/extinction rates **without** Diversity Dependence
+Note: this took ~2 min.
 ```{r, eval=F}
-eqr_noDD <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqr_noDD <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -544,13 +695,15 @@ eqr_noDD <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
                              id.parsopt = c(1,2,4,5),
                              pars.fix = Inf,
                              id.parsfix = 3,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Birth Death model with equal speciation/extinction rates, and specation linear to Diversity Dependence
-Note: this took ~24 min.
+### BDeq with Speciation Linear to DD
+Birth Death model with equal speciation/extinction rates, and specation linear to Diversity Dependence
+Note: this took ~1 min.
 ```{r, eval=F}
-eqr_linDD_1 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqr_linDD_1 <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -558,13 +711,15 @@ eqr_linDD_1 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 
                              id.parsopt = c(1:5),
                              pars.fix = NULL,
                              id.parsfix = NULL,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Birth Death model with equal speciation/extinction rates, and speciation exponential to Diversity Dependence
-Note: this took ~28 min
+### BDeq with Speciation Exponential to DD
+Birth Death model with equal speciation/extinction rates, and speciation exponential to Diversity Dependence
+Note: this took ~2 min
 ```{r, eval=F}
-eqr_expDD_2 <- search.surface.DAISIE(model = all.list.oz, n.iter = 5, n.proc = 12,
+eqr_expDD_2 <- search.surface.DAISIE(model = curr.group, n.iter = 5, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -572,13 +727,15 @@ eqr_expDD_2 <- search.surface.DAISIE(model = all.list.oz, n.iter = 5, n.proc = 1
                              id.parsopt = c(1:5),
                              pars.fix = NULL,
                              id.parsfix = NULL,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Birth Death model with equal speciation/extinction rates, and speciation/immigration linear to Diversity Dependence
-Note: this took ~12 min
+### BDeq with Speciation/Immigration Linear to DD
+Birth Death model with equal speciation/extinction rates, and speciation/immigration linear to Diversity Dependence
+Note: this took ~35 seconds
 ```{r, eval=F}
-eqr_linDD_11 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqr_linDD_11 <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -586,13 +743,15 @@ eqr_linDD_11 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc =
                              id.parsopt = c(1:5),
                              pars.fix = NULL,
                              id.parsfix = NULL,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-### Birth Death model with equal speciation/extinction rates, and speciation/immigration exponential to Diversity Dependence
-Note: this took ~
+### BDeq with Speciation/Immigration Exponential to DD
+Birth Death model with equal speciation/extinction rates, and speciation/immigration exponential to Diversity Dependence
+Note: this took ~2 min
 ```{r, eval=F}
-eqr_expDD_21 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc = 12,
+eqr_expDD_21 <- search.surface.DAISIE(model = curr.group, n.iter = 10, n.proc = 12,
                              g1.params = NULL, g2.params = NULL,
                              results = "all", 
                              start.params = NULL,
@@ -600,10 +759,12 @@ eqr_expDD_21 <- search.surface.DAISIE(model = all.list.oz, n.iter = 10, n.proc =
                              id.parsopt = c(1:5),
                              pars.fix = NULL,
                              id.parsfix = NULL,
-                             no.types = 1)
+                             no.types = 1,
+                             nsamples = ntaxa)
 ```
 
-```{r, eval=F}
+Save all the results of the Equal Rates models to a file
+```{r, eval=F, include=F}
 eqr_res <- list(eqr_noDD = eqr_noDD,
                 eqr_linDD_1 = eqr_linDD_1,
                 eqr_expDD_2 = eqr_expDD_2,
@@ -612,66 +773,754 @@ eqr_res <- list(eqr_noDD = eqr_noDD,
 saveRDS(eqr_res, "../Results/DAISIE_Australian_EqualRatesBD_Results.RDS")
 ```
 
----
-## Split-Rate Birth Death Models
-These models follow the birth death models above, but allow different rates (speciation, extinction, or both) between incumbent and immigrant lineages. They require a DAISIE datalist with two groups designed using *DAISIE_dataprep( )* with *number_clade_types* = 2. 
+\pagebreak
 
-### Birth Death model with **two** speciation rates **without** diversity dependence
-4 parameters (extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation rates for the two groups (*Odatria/Varanus* and immigrants).
+## Split-Rate Birth Death Models
+These models follow the birth death models above, but allow different rates (speciation, extinction, or both) between incumbent and immigrant lineages. They require a DAISIE datalist with two groups designed using *DAISIE_dataprep( )* with *number_clade_types* = 2. We'll have 3 sets of these, allowing (1) **speciation** rates *only* to vary between groups, (2) **extinction** rates *only* to vary between groups, and (3) **speciation** and **extinction** rates to *both* vary between groups. We'll include two additional model sets where speciation rate in the immigrant clade is constrained to 0. One thing to remember is that it's necessary to fix the parameter 11 *p_f* in split-rate models. This is the fraction of mainland species which belong to the second subset rate category. For example, in New Guinea, there are 23 species of Varanus, but 19 of them are in the Hapturosaurus/Euprepiosaurus clade. So when analyzing the Australian dataset, the *p_f* of the immigrant taxa (all Hap/Eup) will be 0.82. 
+
+### Immigrant Speciation 0 (ImmSp0)
+We can start with a very simplistic split rate model where the speciation rate in the immigrant groups is 0.
 ```{r, eval=F}
-twosp_noDD <- search.surface.DAISIE(model = split.list.oz, n.iter = 10, n.proc = 12,
+onesp_noDD <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = NULL,
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 0,
+                                    id.parsopt = c(1,2,4,5),
+                                    pars.fix = c(Inf,0,samp.prop),
+                                    id.parsfix = c(3,6,11),
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### Incumbent Speciation Linear to DD, ImmSp0
+```{r, eval=F}
+onesp_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = NULL,
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 1,
+                                    id.parsopt = c(1,2,3,4,5),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+```{r, eval=F}
+onesp_fixK_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = NULL,
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 1,
+                                    id.parsopt = c(1,2,4,5),
+                                    pars.fix = c(41,0,samp.prop),
+                                    id.parsfix = c(3,6,11),
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### Incumbent Speciation Exponential to DD, ImmSp0
+```{r, eval=F}
+onesp_expDD_2 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = NULL,
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 2,
+                                    id.parsopt = c(1,2,3,4,5),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### Incumbent Speciation/Immigration Linear to DD, ImmSp0
+```{r, eval=F}
+onesp_linDD_11 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = NULL,
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 11,
+                                    id.parsopt = c(1,2,3,4,5),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### Incumbent Speciation/Immigration Exponential to DD, ImmSp0
+```{r, eval=F}
+onesp_expDD_21 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = NULL,
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 21,
+                                    id.parsopt = c(1,2,3,4,5),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+\pagebreak
+
+### BD2sp without DD
+Birth Death model with **two** speciation rates **without** diversity dependence
+4 parameters (extinction, carrying capacity, immigration rate, anagenetic speciation) are estimated across ***ALL*** taxa and groups, but we estimate separate cladogenetic speciation rates for the two groups (*Odatria/Varanus* and immigrants).
+Note: this took ~2 min
+```{r, eval=F}
+twosp_noDD <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
                                     g1.params = NULL, g2.params = c("lambda_c"),
                                     results = "all", 
                                     start.params = NULL,
                                     dd.model = 0,
                                     id.parsopt = c(1,2,4,5,6),
-                                    pars.fix = Inf,
-                                    id.parsfix = 3,
+                                    pars.fix = c(Inf,samp.prop),
+                                    id.parsfix = c(3,11),
                                     id.parsnoshift = c(7:10),
-                                    no.types = 2)
+                                    no.types = 2,
+                                    nsamples = ntaxa)
 ```
 
+### BD2sp Speciation Linear to DD
+BD model with **two** speciation rates linear to Diversity Dependence
+Note: this took ~45 sec
 ```{r, eval=F}
-twosp_linDD_1 <- search.surface.DAISIE(model = split.list.oz, n.iter = 10, n.proc = 12,
+twosp_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
                                     g1.params = NULL, g2.params = c("lambda_c"),
                                     results = "all", 
                                     start.params = NULL,
                                     dd.model = 1,
-                                    id.parsopt = c(1,2,4,5,6),
-                                    pars.fix = NULL,
-                                    id.parsfix = NULL,
+                                    id.parsopt = c(1:6),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
                                     id.parsnoshift = c(7:10),
-                                    no.types = 2)
+                                    no.types = 2,
+                                    nsamples = ntaxa)
 ```
 
+### BD2sp Speciation Exponential to DD
+BD model with **two** speciation rates exponential to Diversity Dependence
+Note: this took ~2 min
+```{r, eval=F}
+twosp_expDD_2 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 2,
+                                    id.parsopt = c(1:6),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2sp Speciation/Immigration Linear to DD
+BD model with **two** speciation/immigration rates linear to Diversity Dependence
+Note: this took ~1 min
+```{r, eval=F}
+twosp_linDD_11 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 11,
+                                    id.parsopt = c(1:6),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2sp Speciation/Immigration Exponential to DD
+BD model with **two** speciation/immigration rates exponential to Diversity Dependence
+Note: this took ~2.5 min
+```{r, eval=F}
+twosp_expDD_21 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 21,
+                                    id.parsopt = c(1:6),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(7:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+
+Save all the results of the Two Sp Rates models to a file
+```{r, eval=F, include=F}
+twosp_res <- list(twosp_noDD =     twosp_noDD,
+                  twosp_linDD_1 =  twosp_linDD_1,
+                  twosp_expDD_2 =  twosp_expDD_2,
+                  twosp_linDD_11 = twosp_linDD_11,
+                  twosp_expDD_21 = twosp_expDD_21)
+saveRDS(twosp_res, "../Results/DAISIE_Australian_TwoSpRatesBD_Results.RDS")
+```
+
+\pagebreak
+
+### BD2ex without DD
+BD model with two extinction rates (equal speciation rates) and no Diversity Dependence
+~35 min
+```{r, eval=F}
+twoex_noDD <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    # becuase the way I've got the 'init.params' bit coded
+                                    # to optimize a separate extinction but not speciation
+                                    # you still have to designate speciation in the g2.params
+                                    # but speciation is listed in the 'id.parsnoshift' set
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 11,
+                                    id.parsopt = c(1,2,4,5,7),
+                                    pars.fix = c(Inf, samp.prop),
+                                    id.parsfix = c(3,11),
+                                    id.parsnoshift = c(6,8,9,10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2ex with Speciation Linear to DD
+BD model with two extinction rates (equal speciation rates) and speciation rate linear to Diversity Dependence
+~ 1 min
+```{r, eval=F}
+twoex_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    # becuase the way I've got the 'init.params' bit coded
+                                    # to optimize a separate extinction but not speciation
+                                    # you still have to designate speciation in the g2.params
+                                    # but speciation is listed in the 'id.parsnoshift' set
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 1,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(6,8,9,10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2ex with Speciation Exponential to DD
+BD model with two extinction rates (equal speciation rates) and speciation rate exponential to Diversity Dependence
+~1.5  min
+```{r, eval=F}
+twoex_expDD_2 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    # becuase the way I've got the 'init.params' bit coded
+                                    # to optimize a separate extinction but not speciation
+                                    # you still have to designate speciation in the g2.params
+                                    # but speciation is listed in the 'id.parsnoshift' set
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 2,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(6,8,9,10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2ex with Speciation/Immigration Linear to DD
+BD model with two extinction rates (equal speciation rates) and speciation/immigration rates linear to Diversity Dependence
+~ 1min
+```{r, eval=F}
+twoex_linDD_11 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    # becuase the way I've got the 'init.params' bit coded
+                                    # to optimize a separate extinction but not speciation
+                                    # you still have to designate speciation in the g2.params
+                                    # but speciation is listed in the 'id.parsnoshift' set
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 11,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(6,8,9,10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2ex with Speciation/Immigration Exponential to DD
+BD model with two extinction rates (equal speciation rates) and speciation/immigration rates linear to Diversity Dependence
+~ 2 min
+```{r, eval=F}
+twoex_expDD_21 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    # becuase the way I've got the 'init.params' bit coded
+                                    # to optimize a separate extinction but not speciation
+                                    # you still have to designate speciation in the g2.params
+                                    # but speciation is listed in the 'id.parsnoshift' set
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 21,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(6,8,9,10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+Save all the results of the Two Ex Rates models to a file
+```{r, eval=F, include=F}
+twoex_res <- list(twoex_noDD =     twoex_noDD,
+                  twoex_linDD_1 =  twoex_linDD_1,
+                  twoex_expDD_2 =  twoex_expDD_2,
+                  twoex_linDD_11 = twoex_linDD_11,
+                  twoex_expDD_21 = twoex_expDD_21)
+saveRDS(twoex_res, "../Results/DAISIE_Australian_TwoExRatesBD_Results.RDS")
+```
+
+\pagebreak
+
+## Split-Rate Birth Death Models with varying speciation **and** extinction
+
+### ImmSp0, BD2ex, noDD
+Two extinction rates, and speciation rate in immigrants is fixed to 0 with no diversity dependence.
+~ 45 sec
+```{r, eval=F}
+twoex_immsp0_noDD <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 0,
+                                    id.parsopt = c(1,2,4,5,7),
+                                    pars.fix = c(Inf,0,samp.prop),
+                                    id.parsfix = c(3,6,11),
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### ImmSp0, BD2ex, Speciation Linear to DD
+~ 40 sec
+```{r, eval=F}
+twoex_immsp0_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 1,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### ImmSp0, BD2ex, Speciation Exponential to DD
+~ 1.5 sec
+```{r, eval=F}
+twoex_immsp0_expDD_2 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 2,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### ImmSp0, BD2ex, Speciation/Immigration Linear to DD
+~ 45 sec
+```{r, eval=F}
+twoex_immsp0_linDD_11 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 11,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### ImmSp0, BD2ex, Speciation/Immigration Exponential to DD
+~  1.7 min
+```{r, eval=F}
+twoex_immsp0_expDD_21 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 21,
+                                    id.parsopt = c(1,2,3,4,5,7),
+                                    pars.fix = c(0,samp.prop),
+                                    id.parsfix = c(6,11),
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+\pagebreak
+
+### BD2spex without DD
+BD model with two speciation and extinction rates and **without** Diversity Dependence
+Note: this took ~ 1 min
+```{r, eval=F}
+twospex_noDD <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 0,
+                                    id.parsopt = c(1,2,4,5,6,7),
+                                    pars.fix = c(Inf,samp.prop),
+                                    id.parsfix = c(3,11),
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2spex with Speciation Linear to DD
+BD model with two speciation and extinction rates and speciation rates linear to Diversity Dependence
+~1.2 min
+```{r, eval=F}
+twospex_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 1,
+                                    id.parsopt = c(1:7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2spex with Speciation Exponential to DD
+BD model with two speciation and extinction rates and speciation rates exponential to Diversity Dependence
+~ 2.4 min
+```{r, eval=F}
+twospex_expDD_2 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 2,
+                                    id.parsopt = c(1:7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2, 
+                                    nsamples = ntaxa)
+```
+
+### BD2spex with Speciation/Immigration Linear to DD
+BD model with two speciation and extinction rates and speciation/immigration rates linear to Diversity Dependence
+~ 42 sec
+```{r, eval=F}
+twospex_linDD_11 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 11,
+                                    id.parsopt = c(1:7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+### BD2spex with Speciation/Immigration Exponential to DD
+BD model with two speciation and extinction rates and speciation/immigration rates exponential to Diversity Dependence
+~ 2 min
+```{r, eval=F}
+twospex_expDD_21 <- search.surface.DAISIE(model = curr.split, n.iter = 5, n.proc = 12,
+                                    g1.params = NULL, g2.params = c("lambda_c", "mu"),
+                                    results = "all", 
+                                    start.params = NULL,
+                                    dd.model = 21,
+                                    id.parsopt = c(1:7),
+                                    pars.fix = samp.prop,
+                                    id.parsfix = 11,
+                                    id.parsnoshift = c(8:10),
+                                    no.types = 2,
+                                    nsamples = ntaxa)
+```
+
+Save all the results of the Two Sp/Ex Rates models to a file
+```{r, eval=F, include=F}
+twospex_res <- list(twospex_noDD =     twospex_noDD,
+                    twospex_linDD_1 =  twospex_linDD_1,
+                    twospex_expDD_2 =  twospex_expDD_2,
+                    twospex_linDD_11 = twospex_linDD_11,
+                    twospex_expDD_21 = twospex_expDD_21)
+saveRDS(twospex_res, "../Results/DAISIE_Australian_TwoSpExRatesBD_Results.RDS")
+```
 
 
 ---
 
+
+Save all the results of the Two Ex Rates models to a file
+```{r, eval=F, include=F}
+twoex_res <- list(twoex_noDD =     twoex_noDD,
+                    twoex_linDD_1 =  twoex_linDD_1,
+                    twoex_expDD_2 =  twoex_expDD_2,
+                    twoex_linDD_11 = twoex_linDD_11,
+                    twoex_expDD_21 = twoex_expDD_21)
+saveRDS(twoex_res, "../Results/DAISIE_Australian_TwoExRatesBD_Results.RDS")
+```
+
+\pagebreak
+
+
+Make sure you've got all the models saved somewhere safe
+```{r, eval=F}
+#all.models <- list(pb_res, eqr_res, twosp_res, twospex_res, twoex_res)
+#saveRDS(all.models, "../Results/DAISIE_Australian_AllModel_Results.RDS")
+
+# MAKE SURE THAT YOU CHANGE THE NAME OF THE OUTPUT FILE!
+save(eqpb_noDD, eqpb_linDD_1, eqpb_linDD_11, eqpb_expDD_2, eqpb_expDD_21,
+     eqr_noDD, eqr_linDD_1, eqr_linDD_11,eqr_expDD_2, eqr_expDD_21, 
+     onesp_noDD, onesp_linDD_1, onesp_linDD_11, onesp_expDD_2, onesp_expDD_21,
+     twosp_noDD, twosp_linDD_1, twosp_linDD_11, twosp_expDD_2, twosp_expDD_21,
+     twoex_noDD, twoex_linDD_1, twoex_linDD_11, twoex_expDD_2, twoex_expDD_21,
+     twoex_immsp0_noDD, twoex_immsp0_linDD_1, twoex_immsp0_linDD_11,
+     twoex_immsp0_expDD_2, twoex_immsp0_expDD_21,
+     twospex_noDD, twospex_linDD_1, twospex_linDD_11, 
+     twospex_expDD_2, twospex_expDD_21, 
+     file="../Results/DAISIE_NewGuinea_AllModel_Results.RData")
+```
+---
+
+\pagebreak
+
+# Comparing Empirical Model Fits
+
+Start by designating which models we want to compare.
+```{r}
+all.DAISIE.models <- c("eqpb_noDD", "eqpb_linDD_1", "eqpb_linDD_11",
+                       "eqpb_expDD_2", "eqpb_expDD_21",
+                       "eqr_noDD", "eqr_linDD_1", "eqr_linDD_11",
+                       "eqr_expDD_2", "eqr_expDD_21",
+                       "onesp_noDD", "onesp_linDD_1", "onesp_linDD_11",
+                       "onesp_expDD_2", "onesp_expDD_21",
+                       "twosp_noDD", "twosp_linDD_1", "twosp_linDD_11",
+                       "twosp_expDD_2", "twosp_expDD_21",
+                       "twospex_noDD", "twospex_linDD_1", "twospex_linDD_11",
+                       "twospex_expDD_2", "twospex_expDD_21",
+                       "twoex_noDD", "twoex_linDD_1", "twoex_linDD_11",
+                       "twoex_expDD_2", "twoex_expDD_21",
+                       "twoex_immsp0_noDD", "twoex_immsp0_linDD_1",
+                       "twoex_immsp0_linDD_11", "twoex_immsp0_expDD_2",
+                       "twoex_immsp0_expDD_21")
+```
+
+
+## Model Fits with AIC
+
+Use the *DAISIE.AIC* function to compare the model fits with AIC  
+This will take the model names as input, use the likelihood to calculate AIC and corrected AIC (AICc), and tell us the contribution of each model to the total model weights (AICcwt).
+```{r, eval = F, include=T}
+all.AIC <- DAISIE.AIC(models = all.DAISIE.models, 
+                      method="best")
+```
+
+\  
 \  
 
-I'll leave a gap here to build more models or show how we could construct them at least.
+## Model Fits with BIC
+
+Use the *DAISIE.BIC* function to compare the model fits with BIC    
+This will take the model as input, use the likelihood to calculate BIC, and tell us the contribution of each model to the total model weights (BICwt)
+```{r, eval=F, include=T}
+all.BIC <- DAISIE.BIC(models = all.DAISIE.models, 
+                      method="best")
+```
+
+\pagebreak
+
+## **Australia** Results
+Let's check model comparison using AIC first
+```{r, eval=T, echo=F}
+load("../Results/DAISIE_Australian_AllModel_Results.RData")
+```
+
+```{r, eval = T, echo=T}
+all.AIC <- DAISIE.AIC(models = all.DAISIE.models, 
+                      method="best")
+```
+```{r, eval=T, echo=F}
+all.AIC$results[,c(1,2,4,5,6)]
+all.AIC$best.model
+all.AIC$parameter.estimates
+```
 
 \  
+
+Then with BIC next
+```{r, eval=T, echo=T}
+all.BIC <- DAISIE.BIC(models = all.DAISIE.models, 
+                      method="best")
+```
+```{r, eval=T, echo=F}
+all.BIC
+```
+
+\pagebreak
+
+```{r, eval=T, echo=F}
+load("../Results/DAISIE_NewGuinea_AllModel_Results.RData")
+```
+
+## Results for the **New Guinea** Monitors
+AIC first
+```{r, eval = T, echo=T}
+all.AIC <- DAISIE.AIC(models = all.DAISIE.models, 
+                      method="best")
+```
+```{r, eval=T, echo=F}
+all.AIC$results[,c(1,2,4,5,6)]
+all.AIC$best.model
+all.AIC$parameter.estimates
+```
+
+\  
+
+BIC next
+```{r, eval=T, echo=T}
+all.BIC <- DAISIE.BIC(models = all.DAISIE.models, 
+                      method="best")
+```
+```{r, eval=T, echo=F}
+all.BIC
+```
+
+---
+
+\pagebreak
+
+<!--Let's try modelling the these rates across the combined datasets-->
+```{r, eval=F, include=F}
+eqr_noDD <- DAISIE_ML(
+            datalist = all.list.combo,
+            datatype = 'multiple',
+            initparsopt = c(0.1, 0.01, 0.05, 0.1),
+            idparsmat = rbind(1:5, 1:5, 1:5),
+            idparsopt = c(1,2,4,5),
+            parsfix = Inf,
+            idparsfix = 3
+)
+```
+```{r, eval=F, include=F}
+eqr_noDD <- DAISIE_ML(
+            datalist = all.list.combo,
+            datatype = 'multiple',
+            initparsopt = c(0.1, 0.01, 0.05, 0.1),
+            idparsmat = rbind(1:5, 1:5, 1:5),
+            idparsopt = c(1,2,4,5),
+            parsfix = Inf,
+            idparsfix = 3
+)
+```
+
+
+```{r, eval=F, include=F}
+split.ii_noDD <- DAISIE_ML(
+                 datalist = combined.list,
+                 datatype = 'multiple',
+                 initparsopt = c(0.1, 0.01, 0.05, 0.1, 
+                                 0.1, 0.01, 0.05, 0.1,
+                                 0.),
+                 idparsmat = rbind(1:5, 6:10, 1:5, 6:10),
+                 idparsopt = c(1,2,4,5),
+                 parsfix = Inf,
+                 idparsfix = 3
+)
+```
+
+
+
+\newpage
+\blandscape
+
+# DAISIE Models Explained
+
+## Model Categories
+
+Q   Regimes   Model Type               Model Name                   Shared                                             Varied               
+--  --------  ----------------        -----------------            -----------------                                  ----------           
+1   1         Pure Birth              Pure Birth---*eqpb*          $\lambda$^c^, $\gamma$, $\lambda$^a^, *K*          ---                   
+2   1         Birth Death             Equal Rates---*eqr*          $\lambda$^c^, $\mu$, $\gamma$, $\lambda$^a^, *K*   --- 
+3   2         Split Rate Birth Death  Split $\lambda$---*onesp*    $\mu$, $\gamma$, $\lambda$^a^, *K*                 $\lambda$^c^ ($\lambda$^c^~2~=0)
+4   2         Split Rate Birth Death  Split $\lambda$---*twosp*    $\mu$, $\gamma$, $\lambda$^a^, *K*                 $\lambda$^c^            
+5   2         Split Rate Birth Death  Split $\mu$---*twoex*        $\lambda$^c^, $\gamma$, $\lambda$^a^, *K*          $\mu$    
+6   2         Split Rate Birth Death  Split $\mu$---*twoex_immsp0* $\gamma$, $\lambda$^a^, *K*                        $\lambda$^c^ ($\lambda$^c^~2~=0), $\mu$
+7   2         Split Rate Birth Death  Split Sp/Ex---*twospex*      $\gamma$, $\lambda$^a^, *K*                        $\lambda$^c^, $\mu$     
+
+
+## Model Specifications
+
+Model#   Q   DAISIE Model            Model Name              DD     #Par.  $\lambda$-DD Corr.  $\gamma$-DD Corr.   Fixed Parameters            Free Parameters
+------   --  ------------            --------------          ---    -----  ------------------  ----------------    --------------------        ----------------------
+M1       1   *eqpb_noDD*             Pure Birth              0      3      ---                 ---                 *K*=Inf                     $\lambda$^c^, $\gamma$, $\lambda$^a^
+M2       1   *eqpb_linDD_1*          Pure Birth              1      4      linear              ---                                             $\lambda$^c^, $\gamma$, $\lambda$^a^, *K*
+M3       1   *eqpb_linDD_11*         Pure Birth              11     4      linear              linear                                          $\lambda$^c^, $\gamma$, $\lambda$^a^, *K*
+M4       1   *eqpb_expDD_2*          Pure Birth              2      4      exponential         ---                                             $\lambda$^c^, $\gamma$, $\lambda$^a^, *K*
+M5       1   *eqpb_expDD_21*         Pure Birth              21     4      exponential         exponential                                     $\lambda$^c^, $\gamma$, $\lambda$^a^, *K*
+M6       2   *eqr_noDD*              Equal Rates             0      4      ---                 ---                 *K*=Inf                     $\lambda$^c^, $\mu$, $\gamma$, $\lambda$^a^
+M7       2   *eqr_linDD_1*           Equal Rates             1      5      linear              ---                                             $\lambda$^c^, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M8       2   *eqr_linDD_11*          Equal Rates             11     5      linear              linear                                          $\lambda$^c^, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M9       2   *eqr_expDD_2*           Equal Rates             2      5      exponential         ---                                             $\lambda$^c^, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M10      2   *eqr_expDD_21*          Equal Rates             21     5      exponential         exponential                                     $\lambda$^c^, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M11      3   *onesp_noDD*            Split $\lambda$         0      4      ---                 ---                 *K*=Inf, $\lambda$~c2~=0    $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^
+M12      3   *onesp_linDD_1*         Split $\lambda$         1      5      linear              ---                 $\lambda$~c2~=0             $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M13      3   *onesp_linDD_11*        Split $\lambda$         11     5      linear              linear              $\lambda$~c2~=0             $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M14      3   *onesp_expDD_2*         Split $\lambda$         2      5      exponential         ---                 $\lambda$~c2~=0             $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M15      3   *onesp_expDD_21*        Split $\lambda$         21     5      exponential         exponential         $\lambda$~c2~=0             $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*
+M16      4   *twosp_noDD*            Split $\lambda$         0      5      ---                 ---                 *K*=Inf                     $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, $\lambda$^c^~2~
+M17      4   *twosp_linDD_1*         Split $\lambda$         1      6      linear              ---                                             $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~
+M18      4   *twosp_linDD_11*        Split $\lambda$         11     6      linear              linear                                          $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~
+M19      4   *twosp_expDD_2*         Split $\lambda$         2      6      exponential         ---                                             $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~
+M20      4   *twosp_expDD_21*        Split $\lambda$         21     6      exponential         exponential                                     $\lambda$^c^~1~, $\mu$, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~
+M21      5   *twoex_noDD*            Split $\mu$             0      5      ---                 ---                 *K*=Inf                     $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, $\mu$~2~
+M22      5   *twoex_linDD_1*         Split $\mu$             1      6      linear              ---                                             $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M23      5   *twoex_linDD_11*        Split $\mu$             11     6      linear              linear                                          $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M24      5   *twoex_expDD_2*         Split $\mu$             2      6      exponential         ---                                             $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M25      5   *twoex_expDD_21*        Split $\mu$             21     6      exponential         exponential                                     $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M26      6   *twoex_immsp0_noDD*     Split $\lambda$, $\mu$  0      5      ---                 ---                 *K*=Inf, $\lambda$~c2~=0    $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, $\mu$~2~
+M27      6   *twoex_immsp0_linDD_1*  Split $\lambda$, $\mu$  1      6      linear              ---                 $\lambda$~c2~=0             $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M28      6   *twoex_immsp0_linDD_11* Split $\lambda$, $\mu$  11     6      linear              linear              $\lambda$~c2~=0             $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M29      6   *twoex_immsp0_expDD_2*  Split $\lambda$, $\mu$  2      6      exponential         ---                 $\lambda$~c2~=0             $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M30      6   *twoex_immsp0_linDD_21* Split $\lambda$, $\mu$  1      6      exponential         exponential         $\lambda$~c2~=0             $\lambda$^c^, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\mu$~2~
+M31      7   *twospex_noDD*          Split $\lambda$, $\mu$  0      6      ---                 ---                 *K*=Inf                     $\lambda$^c^~1~, $\mu$~1~, $\gamma$, $\lambda$^a^, $\lambda$^c^~2~, $\mu$~2~
+M32      7   *twospex_linDD_1*       Split $\lambda$, $\mu$  1      7      linear              ---                                             $\lambda$^c^~1~, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~, $\mu$~2~
+M33      7   *twospex_linDD_11*      Split $\lambda$, $\mu$  11     7      linear              linear                                          $\lambda$~c1~, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~, $\mu$~2~
+M34      7   *twospex_expDD_2*       Split $\lambda$, $\mu$  2      7      exponential         ---                                             $\lambda$~c1~, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~, $\mu$~2~
+M35      7   *twospex_expDD_21*      Split $\lambda$, $\mu$  21     7      exponential         exponential                                     $\lambda$~c1~, $\mu$~1~, $\gamma$, $\lambda$^a^, *K*, $\lambda$^c^~2~, $\mu$~2~
+
+
+\elandscape
 
 --- 
-
-## Comparing the fit of DAISIE Models run in parallel
-Compare the fit of the models using the custom *DAISIE.AIC* function.
-```{r, eval=F}
-source("../Scripts/Calculate_AICs.R")
-equal_rates <- eqr$best.result
-two_sp <- two_lambda$best.result
-DAISIE.AIC(models = c("equal_rates", "two_sp"))
-```
 
 \pagebreak
 
 # Diversification Models with ClaDS
 
 Direct your working directory to the folder that holds the ClaDS scripts
-```{r, eval=F}
-setwd("~/Google.Drive/R.Analyses/ClaDS/")
+```{r setup2, eval=F, include=FALSE, echo=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "~/Google.Drive/R.Analyses/ClaDS/")
 ```
 
 Load RPANDA

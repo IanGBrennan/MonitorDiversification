@@ -7,12 +7,14 @@
 
 library(parallel)
 
-search.surface.DAISIE <- function(model, n.iter = 10, n.proc = 8, 
+search.surface.DAISIE <- function(model, n.iter = 10, n.proc = 8, nsamples = NULL, datatype="single",
                            g1.params=c(lambda_c=1, mu=0.5, K=30, immigration=0.01, lambda_a=0.1),
                            g2.params=c("lambda_c", "mu", "K", "immigration", "lambda_a"), 
                            results=c("best", "all"), start.params=NULL, 
                            id.parsopt, dd.model, pars.fix, id.parsfix, id.parsnoshift, no.types) {
   beginning <- Sys.time()
+  
+  if(is.null(nsamples)) stop("please provide the number of taxa in this model as the nsamples value")
   
   if(is.null(start.params)){
     init.params <- lapply(1:n.iter, function(x) {
@@ -36,6 +38,7 @@ search.surface.DAISIE <- function(model, n.iter = 10, n.proc = 8,
   if(no.types == 1) {
     res.list <- mclapply(1:n.iter, function(x) {
       DAISIE_ML(datalist = model,
+                datatype = 'single',
                 ddmodel = dd.model,
                 initparsopt = init.params[[x]],
                 #initparsopt = unlist(eqr_noDD_0[c(1,2,4,5)]), # leaving this here to show that you have to unlist parameters from a previous model fit, annoying!
@@ -47,6 +50,7 @@ search.surface.DAISIE <- function(model, n.iter = 10, n.proc = 8,
   if(no.types == 2) {
     res.list <- mclapply(1:n.iter, function(x) {
       DAISIE_ML(datalist = model,
+                datatype = 'single',
                 ddmodel = dd.model,
                 initparsopt = init.params[[x]],
                 idparsopt = id.parsopt,
@@ -77,11 +81,17 @@ search.surface.DAISIE <- function(model, n.iter = 10, n.proc = 8,
 #  if(redo.res$conv == -1){best.res <- best.res} # remove any model fits that didn't converge
 #  else if(redo.res$loglik > best.res$loglik){best.res <- redo.res}
   
+  model$nsamples <- nsamples
+  
   end <- Sys.time()
   duration <- format(end-beginning)
   print(paste("Computation time to fit the model from", n.iter, "starting points:", duration))
+  system("say beep")
   
-  if(results=="all"){return(list(all.results = res.list, best.result = best.res))}
+  if(results=="all"){return(list(input.model = model,
+                                 start.params = init.params, 
+                                 all.results = res.list, 
+                                 best.result = best.res))}
   else if(results=="best"){return(best.res)}
   
 }

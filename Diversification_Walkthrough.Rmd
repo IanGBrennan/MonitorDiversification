@@ -816,7 +816,7 @@ onesp_fixK_linDD_1 <- search.surface.DAISIE(model = curr.split, n.iter = 10, n.p
                                     start.params = NULL,
                                     dd.model = 1,
                                     id.parsopt = c(1,2,4,5),
-                                    pars.fix = c(41,0,samp.prop),
+                                    pars.fix = c(23,0,samp.prop),
                                     id.parsfix = c(3,6,11),
                                     id.parsnoshift = c(7:10),
                                     no.types = 2,
